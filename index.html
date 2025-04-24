@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机单词生成器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 800px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
+        }
+        .word-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 2rem 0;
+            min-height: 3rem;
+        }
+        #wordDisplay {
+            font-size: 2rem;
+            color: #2c3e50;
+            margin: 0;
+            opacity: 0;
+            transform: scale(0.3);
+            transition: all 0.3s ease;
+        }
+        #wordDisplay.show {
+            opacity: 1;
+            transform: scale(1);
+            animation: wordBounce 0.6s ease forwards;
+        }
+        #translationDisplay {
+            font-size: 1.8rem;
+            color: #e74c3c;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+        }
+        #translationDisplay.show {
+            opacity: 1;
+            transform: translateY(0);
+            animation: bounce 0.5s ease;
+        }
+        @keyframes bounce {
+            0% {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-10px);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        @keyframes wordBounce {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
+            70% {
+                transform: scale(0.9);
+                opacity: 0.9;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        button {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        select {
+            padding: 1rem;
+            font-size: 1.1rem;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-right: 1rem;
+        }
+        #fileInput {
+            display: none;
+        }
+        .file-upload-btn {
+            background-color: #2ecc71;
+        }
+        .file-upload-btn:hover {
+            background-color: #27ae60;
+        }
+        .translate-btn {
+            background-color: #e74c3c;
+        }
+        .translate-btn:hover {
+            background-color: #c0392b;
+        }
+        .clear-btn {
+            background-color: #e67e22;
+        }
+        .clear-btn:hover {
+            background-color: #d35400;
+        }
+        .status-message {
+            margin-top: 1rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .format-hint {
+            margin-top: 1rem;
+            color: #666;
+            font-size: 0.9rem;
+            text-align: left;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .divider {
+            color: #95a5a6;
+            font-size: 2rem;
+            margin: 0 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .divider.show {
+            opacity: 1;
+        }
+        .sheet-selector-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .sheet-selector-label {
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <div style="position: absolute; left: 20px; top: 20px; display: flex; gap: 10px;">
+        <button class="file-upload-btn" onclick="document.getElementById('fileInput').click()">导入Excel文件</button>
+        <button class="clear-btn" onclick="clearWordPairs()" id="clearBtn">清空数据</button>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileUpload(event)" style="display: none;">
+    </div>
+    <button style="position: absolute; top: 20px; right: 20px;" onclick="toggleMode()" id="modeToggleBtn">切换为中文模式</button>
+    <div class="container">
+        <h1>随机单词生成</h1>
+        <div class="word-container">
+            <div id="wordDisplay"></div>
+            <div class="divider">|</div>
+            <div id="translationDisplay"></div>
+        </div>
+        <div class="button-group">
+            <div class="sheet-selector-container" id="sheetSelectorContainer" style="display: none;">
+                <label class="sheet-selector-label">选择单元:</label>
+                <select id="sheetSelector" onchange="changeSheet()" disabled></select>
+            </div>
+            <button onclick="generateRandomWord()" id="randomBtn">开始随机生成</button>
+            <button class="translate-btn" onclick="translateCurrentWord()" id="translateBtn" disabled>显示中文</button>
+        </div>
+        <div id="statusMessage" class="status-message"></div>
+        <div id="defaultWordsMessage" class="status-message" style="display: none;"></div>
+        <div class="format-hint">
+
+            Excel文件格式说明：<br>
+            - 第一列：英文单词/短语<br>
+            - 第二列：对应的中文翻译
+        </div>
+    </div>
+
+    <script>
+        const defaultWordPairs = [
+            { english: 'Innovation', chinese: '创新' },
+            { english: 'Wisdom', chinese: '智慧' },
+            { english: 'Never give up', chinese: '永不放弃' },
+            { english: 'Hope for the best', chinese: '抱最好的希望' },
+            { english: 'Sweet dreams', chinese: '甜蜜的梦' }
+        ];
+
+        let wordPairs = [...defaultWordPairs];
+        let currentWord = '';
+        let isEnglishMode = true;
+        let workbook = null;
+        let currentSheetIndex = 0;
+        let isDefaultWords = true;
+
+        // 页面加载时从localStorage加载数据
+        window.onload = function() {
+            // 隐藏清空按钮
+            document.getElementById('clearBtn').style.display = 'none';
+
+            // 加载单词列表
+            const savedWordPairs = localStorage.getItem('wordPairs');
+            if (savedWordPairs) {
+                wordPairs = JSON.parse(savedWordPairs);
+                isDefaultWords = areWordPairsDefault(wordPairs);
+            } else {
+                wordPairs = [...defaultWordPairs];
+                isDefaultWords = true;
+            }
+
+            // 加载工作簿数据
+            const savedWorkbook = localStorage.getItem('workbook');
+            if (savedWorkbook) {
+                try {
+                    workbook = JSON.parse(savedWorkbook);
+                    // 更新工作表选择器
+                    const sheetSelector = document.getElementById('sheetSelector');
+                    sheetSelector.innerHTML = '';
+                    workbook.SheetNames.forEach((sheetName, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = sheetName;
+                        sheetSelector.appendChild(option);
+                    });
+                    sheetSelector.disabled = false;
+
+                    // 恢复当前工作表索引
+                    const savedCurrentSheetIndex = localStorage.getItem('currentSheetIndex');
+                    if (savedCurrentSheetIndex !== null) {
+                        currentSheetIndex = parseInt(savedCurrentSheetIndex);
+                        sheetSelector.value = currentSheetIndex; // 更新下拉框的选中值
+                    } else {
+                        // 如果没有保存的工作表索引，使用第一个工作表
+                        currentSheetIndex = 0;
+                        sheetSelector.value = currentSheetIndex;
+                    }
+
+                    updateWordPairsFromSheet();
+
+                    document.getElementById('statusMessage').textContent = 
+                        `已加载 ${wordPairs.length} 个单词/短语对`;
+                    setTimeout(() => {
+                        document.getElementById('statusMessage').textContent = '';
+                    }, 3000); // 3秒后清除提示
+                } catch (error) {
+                    console.error('Error loading workbook:', error);
+                }
+            }
+
+            // 恢复按钮状态
+            document.getElementById('randomBtn').disabled = wordPairs.length === 0;
+            document.getElementById('translateBtn').disabled = wordPairs.length === 0;
+            document.getElementById('modeToggleBtn').disabled = wordPairs.length === 0;
+
+            // 如果有工作簿数据，则显示工作表选择器和清空按钮
+            if (workbook) {
+                document.getElementById('sheetSelectorContainer').style.display = 'flex';
+                document.getElementById('clearBtn').style.display = 'inline-block';
+                document.getElementById('defaultWordsMessage').style.display = 'none';
+            } else {
+                // 显示默认单词提示
+                document.getElementById('defaultWordsMessage').textContent = '您当前没有导入文件，显示的是默认单词或短语';
+                document.getElementById('defaultWordsMessage').style.display = 'block';
+            }
+        };
+
+        function areWordPairsDefault(currentPairs) {
+            if (currentPairs.length !== defaultWordPairs.length) {
+                return false;
+            }
+            for (let i = 0; i < currentPairs.length; i++) {
+                if (currentPairs[i].english !== defaultWordPairs[i].english || 
+                    currentPairs[i].chinese !== defaultWordPairs[i].chinese) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function generateRandomWord() {
+            if (wordPairs.length === 0) {
+                document.getElementById('statusMessage').textContent = '没有可用的单词或短语，请导入包含单词的表格';
+                setTimeout(() => {
+                    document.getElementById('statusMessage').textContent = '';
+                }, 3000);
+                return;
+            }
+            const randomIndex = Math.floor(Math.random() * wordPairs.length);
+            currentWord = wordPairs[randomIndex];
+            const wordDisplay = document.getElementById('wordDisplay');
+            
+            wordDisplay.classList.remove('show');
+            
+            void wordDisplay.offsetWidth;
+            
+            if (isEnglishMode) {
+                wordDisplay.textContent = currentWord.english;
+            } else {
+                wordDisplay.textContent = currentWord.chinese;
+            }
+            
+            wordDisplay.classList.add('show');
+            
+            document.getElementById('translationDisplay').textContent = '';
+            document.getElementById('translationDisplay').classList.remove('show');
+            document.querySelector('.divider').classList.remove('show');
+            
+            document.getElementById('translateBtn').disabled = false;
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // 更新工作表选择器
+                    const sheetSelector = document.getElementById('sheetSelector');
+                    sheetSelector.innerHTML = '';
+                    workbook.SheetNames.forEach((sheetName, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = sheetName;
+                        sheetSelector.appendChild(option);
+                    });
+                    
+                    sheetSelector.disabled = false;
+                    
+                    // 默认选择第一个工作表
+                    currentSheetIndex = 0;
+                    updateWordPairsFromSheet();
+                    
+                    // 保存到localStorage
+                    localStorage.setItem('wordPairs', JSON.stringify(wordPairs));
+                    localStorage.setItem('workbook', JSON.stringify(workbook));
+                    localStorage.setItem('currentSheetIndex', currentSheetIndex);
+                    
+                    document.getElementById('statusMessage').textContent = 
+                        `成功导入 ${wordPairs.length} 个单词/短语对`;
+                    document.getElementById('wordDisplay').textContent = '';
+                    document.getElementById('translationDisplay').textContent = '';
+                    document.getElementById('randomBtn').disabled = false;
+                    document.getElementById('translateBtn').disabled = true;
+                    document.getElementById('modeToggleBtn').disabled = false;
+                    document.getElementById('sheetSelectorContainer').style.display = 'flex';
+                    document.getElementById('clearBtn').style.display = 'inline-block';
+                    document.getElementById('defaultWordsMessage').style.display = 'none';
+                    document.querySelector('.divider').classList.remove('show');
+                    
+                    // 3秒后清除提示
+                    setTimeout(() => {
+                        document.getElementById('statusMessage').textContent = '';
+                    }, 3000);
+                } catch (error) {
+                    document.getElementById('statusMessage').textContent = '导入失败，请确保文件格式正确';
+                    console.error('Error reading file:', error);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateWordPairsFromSheet() {
+            if (!workbook) return;
+
+            const sheetName = workbook.SheetNames[currentSheetIndex];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+            
+            wordPairs = jsonData
+                .filter(row => row && row.length >= 2)
+                .filter(row => row[0] && typeof row[0] === 'string' && /^[a-zA-Z\s\.,!']+$/.test(row[0].trim()))
+                .map(row => ({
+                    english: row[0].trim(),
+                    chinese: row[1] ? row[1].toString().trim() : '暂无翻译'
+                }));
+            
+            // 保存到localStorage
+            localStorage.setItem('wordPairs', JSON.stringify(wordPairs));
+        }
+
+        function changeSheet() {
+            currentSheetIndex = parseInt(document.getElementById('sheetSelector').value);
+            updateWordPairsFromSheet();
+            
+            if (wordPairs.length === 0) {
+                document.getElementById('wordDisplay').textContent = '';
+                document.getElementById('translationDisplay').textContent = '';
+                document.getElementById('randomBtn').disabled = true;
+                document.getElementById('translateBtn').disabled = true;
+                document.getElementById('modeToggleBtn').disabled = true;
+                document.getElementById('statusMessage').textContent = '当前文件中没有可用的单词或短语';
+            } else {
+                document.getElementById('randomBtn').disabled = false;
+                document.getElementById('translateBtn').disabled = false;
+                document.getElementById('modeToggleBtn').disabled = false;
+                document.getElementById('statusMessage').textContent = 
+                    `已切换到: ${workbook.SheetNames[currentSheetIndex]}`;
+            }
+            
+            // 保存当前工作表索引到localStorage
+            localStorage.setItem('currentSheetIndex', currentSheetIndex);
+            
+            // 3秒后清除提示
+            setTimeout(() => {
+                document.getElementById('statusMessage').textContent = '';
+            }, 3000);
+        }
+
+        function translateCurrentWord() {
+            const translationDisplay = document.getElementById('translationDisplay');
+            const divider = document.querySelector('.divider');
+            const translateBtn = document.getElementById('translateBtn');
+            const wordDisplay = document.getElementById('wordDisplay');
+
+            if (!currentWord || !wordDisplay.textContent) {
+                document.getElementById('statusMessage').textContent = '请先随机生成单词或短语';
+                setTimeout(() => {
+                    document.getElementById('statusMessage').textContent = '';
+                }, 2000);
+                return;
+            }
+            
+            translateBtn.disabled = true;
+            
+            if (isEnglishMode) {
+                translationDisplay.textContent = currentWord.chinese;
+            } else {
+                translationDisplay.textContent = currentWord.english;
+            }
+            
+            translationDisplay.classList.add('show');
+            divider.classList.add('show');
+            
+            translateBtn.disabled = false;
+        }
+
+        function toggleMode() {
+            if (wordPairs.length === 0) {
+                document.getElementById('statusMessage').textContent = '没有可用的单词或短语，请导入包含单词的表格';
+                setTimeout(() => {
+                    document.getElementById('statusMessage').textContent = '';
+                }, 3000);
+                return;
+            }
+            
+            isEnglishMode = !isEnglishMode;
+            const modeButton = document.getElementById('modeToggleBtn');
+            const translateBtn = document.getElementById('translateBtn');
+            
+            if (isEnglishMode) {
+                modeButton.textContent = '切换为中文模式';
+                translateBtn.textContent = '显示中文';
+            } else {
+                modeButton.textContent = '切换为英文模式';
+                translateBtn.textContent = '显示英文';
+            }
+            
+            document.getElementById('wordDisplay').textContent = '';
+            document.getElementById('translationDisplay').textContent = '';
+            document.getElementById('randomBtn').disabled = false;
+            document.getElementById('translateBtn').disabled = true;
+            document.querySelector('.divider').classList.remove('show');
+        }
+
+        function clearWordPairs() {
+            if (workbook) {
+                workbook = null;
+                currentSheetIndex = 0;
+                
+                localStorage.removeItem('workbook');
+                localStorage.removeItem('currentSheetIndex');
+                
+                document.getElementById('wordDisplay').textContent = '';
+                document.getElementById('translationDisplay').textContent = '';
+                document.getElementById('sheetSelector').innerHTML = '';
+                document.getElementById('sheetSelector').disabled = true;
+                document.getElementById('sheetSelectorContainer').style.display = 'none';
+                document.getElementById('clearBtn').style.display = 'none';
+                document.querySelector('.divider').classList.remove('show');
+                document.getElementById('statusMessage').textContent = '导入的单词数据已清空';
+                
+                // 恢复默认单词列表
+                wordPairs = [...defaultWordPairs];
+                localStorage.setItem('wordPairs', JSON.stringify(wordPairs));
+                
+                // 恢复按钮状态
+                document.getElementById('randomBtn').disabled = false;
+                document.getElementById('translateBtn').disabled = true;
+                document.getElementById('modeToggleBtn').disabled = false;
+                
+                // 显示默认单词提示
+                document.getElementById('defaultWordsMessage').textContent = '您当前没有导入文件，显示的是默认单词或短语';
+                document.getElementById('defaultWordsMessage').style.display = 'block';
+                
+                // 3秒后清除提示
+                setTimeout(() => {
+                    document.getElementById('statusMessage').textContent = '';
+                }, 3000);
+            } else {
+                document.getElementById('statusMessage').textContent = '没有可清空的单词数据';
+                setTimeout(() => {
+                    document.getElementById('statusMessage').textContent = '';
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
